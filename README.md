@@ -1,2 +1,1 @@
-# promotion-tracker
-Promotion Payment Tracker
+# Promotion Tracker
