@@ -152,3 +152,189 @@ tbody tr:hover{background:#F8FAFC}
 </div>
 
 <div id="drawer" class="drawer"></div>
+
+  
+<script>
+let allRows = [];
+let filteredRows = [];
+
+const fileInput = document.getElementById("file");
+const searchInput = document.getElementById("search");
+const asmFilter = document.getElementById("asm");
+const statusFilter = document.getElementById("status");
+const tableBody = document.getElementById("tableBody");
+const drawer = document.getElementById("drawer");
+
+// โหลด Excel
+fileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  allRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+  loadASM();
+  renderTable();
+});
+
+// โหลด ASM ลง Filter
+function loadASM() {
+  const list = [...new Set(allRows.map(r => r["ASM"]).filter(Boolean))];
+  asmFilter.innerHTML = '<option value="">ทุก ASM</option>';
+  list.forEach(a => {
+    asmFilter.innerHTML += `<option>${a}</option>`;
+  });
+}
+
+// อ่านยอดเงิน (รองรับชื่อคอลัมน์ไทย)
+function getAmount(r) {
+  return Number(
+    r["ยอดจ่าย"] ||
+    r["Amount"] ||
+    r["ยอดจ่ายรวม"] ||
+    0
+  ) || 0;
+}
+
+// Render ตาราง
+function renderTable() {
+
+  filteredRows = [...allRows];
+
+  // Search
+  if (searchInput.value) {
+    filteredRows = filteredRows.filter(r =>
+      (r["Customer Name"] || "").toLowerCase()
+        .includes(searchInput.value.toLowerCase())
+    );
+  }
+
+  // ASM Filter
+  if (asmFilter.value) {
+    filteredRows = filteredRows.filter(r => r["ASM"] === asmFilter.value);
+  }
+
+  // Status Filter
+  if (statusFilter.value) {
+    filteredRows = filteredRows.filter(r =>
+      (r["Status"] || "Pending") === statusFilter.value
+    );
+  }
+
+  tableBody.innerHTML = "";
+
+  let total = 0;
+  let paid = 0;
+  const stores = new Set();
+
+  filteredRows.forEach((r, i) => {
+
+    const amount = getAmount(r);
+    total += amount;
+
+    stores.add(r["Customer Name"]);
+
+    const status = (r["Status"] || "Pending");
+
+    if (status.toLowerCase() === "finish") paid++;
+
+    const cls =
+      status === "Finish" ? "finish" :
+      status === "Pending" ? "pending" :
+      "processing";
+
+    tableBody.innerHTML += `
+      <tr onclick="openDetail(${i})">
+        <td>${r["Customer Name"] || "-"}</td>
+        <td>${r["ASM"] || "-"}</td>
+        <td>${r["Period"] || "-"}</td>
+        <td>฿${amount.toLocaleString()}</td>
+        <td><span class="badge ${cls}">${status}</span></td>
+      </tr>`;
+  });
+
+  amountCard.textContent = "฿" + total.toLocaleString();
+  paidCard.textContent = paid;
+  pendingCard.textContent = filteredRows.length - paid;
+  shopsCard.textContent = stores.size;
+}
+
+// KPI
+const amountCard = document.getElementById("amount");
+const paidCard = document.getElementById("paid");
+const pendingCard = document.getElementById("pending");
+const shopsCard = document.getElementById("shops");
+
+// Filter Events
+searchInput.addEventListener("input", renderTable);
+asmFilter.addEventListener("change", renderTable);
+statusFilter.addEventListener("change", renderTable);
+
+// เปิดรายละเอียด
+window.openDetail = function(index){
+
+  const r = filteredRows[index];
+
+  drawer.classList.add("open");
+
+  drawer.innerHTML = `
+    <button onclick="drawer.classList.remove('open')"
+      style="float:right;background:none;border:none;font-size:28px;cursor:pointer">
+      ×
+    </button>
+
+    <h2>${r["Customer Name"] || "-"}</h2>
+
+    <p><b>Customer Code:</b> ${r["Customer Code"] || "-"}</p>
+
+    <p><b>ASM:</b> ${r["ASM"] || "-"}</p>
+
+    <p><b>Period:</b> ${r["Period"] || "-"}</p>
+
+    <p><b>ยอดจ่าย:</b> ฿${getAmount(r).toLocaleString()}</p>
+
+    <p><b>Status:</b> ${r["Status"] || "Pending"}</p>
+
+    <hr style="margin:20px 0">
+
+    <h3>รายละเอียดโปรโมชั่น</h3>
+
+    <p>${(r["รายละเอียด"] || "-").replace(/\n/g,"<br>")}</p>
+
+    <hr style="margin:20px 0">
+
+    <h3>สินค้า</h3>
+
+    <p>${(r["Product"] || "-").replace(/\n/g,"<br>")}</p>
+
+    <hr style="margin:20px 0">
+
+    <h3>เอกสาร</h3>
+
+    ${
+      r["Memo"] ?
+      `<a class="doc" href="${r["Memo"]}" target="_blank">📄 เปิดรายละเอียด (Memo)</a>` : ""
+    }
+
+    ${
+      r["SCN"] ?
+      `<a class="doc" href="${r["SCN"]}" target="_blank">📄 ${r["SCN"]}</a>` : ""
+    }
+
+    ${
+      r["Inv."] ?
+      `<a class="doc" href="${r["Inv."]}" target="_blank">📄 ${r["Inv."]}</a>` : ""
+    }
+
+    <hr style="margin:20px 0">
+
+    <h3>หมายเหตุ</h3>
+
+    <p>${r["หมายเหตุ"] || "-"}</p>
+
+  `;
+}
+</script>
+</body>
+</html>
